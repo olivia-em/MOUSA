@@ -1,0 +1,41 @@
+{
+  "original": "ἄνδρα μοι ἔννεπε, μοῦσα, πολύτροπον, ὃς μάλα πολλὰ\nπλάγχθη, ἐπεὶ Τροίης ἱερὸν πτολίεθρον ἔπερσεν·\nπολλῶν δ᾽ ἀνθρώπων ἴδεν ἄστεα καὶ νόον ἔγνω,\nπολλὰ δ᾽ ὅ γ᾽ ἐν πόντῳ πάθεν ἄλγεα ὃν κατὰ θυμόν,\nἀρνύμενος ἥν τε ψυχὴν καὶ νόστον ἑταίρων.",
+  "cycles": [
+    {
+      "cycle": 1,
+      "english": "Sing to me, Muse, of man, whose heart is full of pain,\nwho wandered much, for he had sacked the sacred city of Troy.\nHe saw many cities of men and understood their mind,\nand suffered much on earth in the wide sea his pains,\never yearning for his soul and his return with his comrades.",
+      "greek": "Ἀκούσθηναι μοι, Ο Muse, τῷ ἀνθρώπῳ,\nὅς πλήθονταί στράτιζεται πόνῳ,\nὃς ἔλαβεν τὴν ἱερὰν πόλιν Τροίας\nκαὶ ἰδέσθαι πολλὰς πόλεις ἀνθρώπων\nἡμῶν καὶ κατανόησεν τὸν ψυχήν μας,\nκαὶ πόνῳ πολλῷ ἐν τῇ πονηρᾶ θάλασσα\nὑπομεῖναι, ὅς ἔχθοντος πνεύματος αὐτοῦ\nἡμῶν καὶ πάλαισθαι μετὰ σωμάτων αὐτῶν.",
+      "similarity": 0.0547945205479452
+    },
+    {
+      "cycle": 2,
+      "english": "It was heard by me, O Muse, of the man,\nwho toils with great numbers,\nwho took the sacred city of Troy\nand saw many cities of men\nof ours and understood our soul,\nand endured much suffering in that wicked sea,\nwho bore the spirit of his own people\nand awoke again after their bodies.",
+      "greek": "Ἐκ τῶν ῥημάτων μοι ἤχθην, ὦ Μοῦσα,\nτὸν ἀνθρώπον, οἷς μέγιστος ἄνθρωπος\nἔπεσεν εἰς τὴν ἱερὰν πόλιν Τροίας\nκαὶ ἐξέβηκεν πολλὰς πόλεις τῶν ἀνθρώπων\nἡμῶν καὶ συνήρθεν τῇ ψυχή μας,\nκαὶ πειράζεται πολλὰ δυσχερέα θάλασσα,\nκαὶ φέρεται τὸ πνεῦμα τοῦ ἑαυτοῦ λαοῦ\nκαὶ ἀναστρέφεται πάλιν ὅταν ἐστιθύνην.",
+      "similarity": 0.06756756756756757
+    },
+    {
+      "cycle": 3,
+      "english": "I was overcome with words, O Muse,\nthe man who fell from the greatest of men\ninto the sacred city of Troy\nand has conquered many cities of our kind\nand united our spirit,\nand is tested by many difficult sea voyages,\nand carries his own people's breath\nand returns again when he finds a foothold.",
+      "greek": "Ἐγώ, Ὀδυσσεύς, ἄνθρωπος, ὃς πάντ' ἐκ τοῦ μέλλοντος ἄνδρος\nεἴπετο τῇ Τροίαν πόλει, ἣν ἰσορROPέων ἔβη\nκαὶ πολλὰς πόλεις ἡμῶν κατέλαβεν,\nκαὶ ἡ ψυχή ἡμῶν ἕνωσε,\nκαί πολλοῦ δυσκωμίων θαλάσσης πειράζεται,\nκαί τὸν αὖτονος ἀέριpon, καὶ τὰν ἑαυτόν\nἀναστρεφόμενος, πορεύμενος, ὅτε πίστῃ στρώμα.",
+      "similarity": 0.02702702702702703
+    }
+  ],
+  "metadata": {
+    "passage_name": "custom",
+    "model": "llama3.2:3b",
+    "total_cycles": 3,
+    "timestamp": "2025-10-07T17:47:15.448Z"
+  },
+  "analysis": {
+    "key_changes": [
+      "Text length: 234 → 284 characters",
+      "Similarity score: 2.7%",
+      "Vocabulary and style have shifted through translation cycles"
+    ],
+    "summary": "Translation degraded through 50 character change with 2.7% similarity remaining",
+    "final_similarity": 0.02702702702702703,
+    "length_change": 50,
+    "length_ratio": 1.2136752136752136,
+    "degradation_level": "high"
+  }
+}
