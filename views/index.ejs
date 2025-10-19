@@ -1,155 +1,1069 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Μοῦσα - Odyssey Translation Explorer</title>
-    <link rel="stylesheet" href="/style.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>Μοῦσα Translation Explorer</h1>
-            <p>Watch the Odyssey Book 1 degrade through translation cycles</p>
-        </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Μοῦσα</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script src="https://unpkg.com/tone@14.7.77/build/Tone.js"></script>
+  </head>
+  <body>
+    <div class="minimal-container">
+      <!-- Imprint layers container -->
+      <div id="imprintContainer" class="imprint-container"></div>
 
-        <main>
-            <section class="odyssey-section">
-                <div class="original-text">
-                    <h2>The Odyssey - Book 1 (Original Ancient Greek)</h2>
-                    <div id="originalGreek" class="greek-text loading">Loading Odyssey text...</div>
-                </div>
+      <!-- Translation display - centered -->
+      <div id="translationDisplay" class="translation-display hidden">
+        <div id="textContent" class="text-content english"></div>
+      </div>
 
-                <div class="controls">
-                    <button id="runTranslationCycle" class="btn-primary">Run Translation Cycle</button>
-                    <div class="cycle-counter">
-                        <span>Cycle: <strong id="cycleNumber">0</strong></span>
-                    </div>
-                </div>
-
-                <div id="translationResults" class="translation-results">
-                    <!-- Translation cycles will appear here -->
-                </div>
-            </section>
-        </main>
-
-        <footer>
-            <p>&copy; 2025 Μοῦσα Translation Explorer</p>
-        </footer>
+      <!-- Fixed floating button - bottom right -->
+      <button id="cycleBtn" class="floating-btn">
+        <span class="btn-text">α</span>
+      </button>
     </div>
 
     <script>
-        let currentCycle = 0;
-        let currentText = '';
-        let originalText = '';
+      class TranslationCycle {
+        constructor() {
+          this.currentCycle = 0;
+          this.currentText = "";
+          this.originalGreek = "";
+          this.isLoading = false;
+          this.isRunning = false;
+          this.shouldStop = false;
+          this.audioFinished = false;
+          this.cycleLog = [];
+          this.currentUtterance = null; // Track current audio for crossfade
+          this.imprints = []; // Track imprint layers
+          this.continuousDegradationInterval = null; // Track continuous morphing
 
-        // Load the Odyssey text on page load
-        window.addEventListener('DOMContentLoaded', async () => {
+          this.ttsSettings = {
+            rate: 0.6,
+            pitch: 0.8,
+            volume: 1.0,
+            lang: "el-GR",
+          };
+
+          // Tone.js atmospheric audio setup
+          this.atmosphereInitialized = false;
+          this.atmosphereNodes = null;
+
+          // Greek letters for character morphing
+          this.greekLetters = [
+            "α",
+            "β",
+            "γ",
+            "δ",
+            "ε",
+            "ζ",
+            "η",
+            "θ",
+            "ι",
+            "κ",
+            "λ",
+            "μ",
+            "ν",
+            "ξ",
+            "ο",
+            "π",
+            "ρ",
+            "σ",
+            "τ",
+            "υ",
+            "φ",
+            "χ",
+            "ψ",
+            "ω",
+            "Α",
+            "Β",
+            "Γ",
+            "Δ",
+            "Ε",
+            "Ζ",
+          ];
+
+          this.init();
+        }
+
+        // Voice variation is handled in playGreekAudioWithPromise method
+        async init() {
+          await this.loadOriginalText();
+          this.setupEventListeners();
+          this.enableButton();
+          this.initAtmosphere();
+        }
+
+        async loadOriginalText() {
+          try {
+            const response = await fetch("/api/passages/odyssey_book1");
+            const data = await response.json();
+
+            if (data.error) {
+              throw new Error(data.error);
+            }
+
+            this.originalGreek = data.content;
+            this.currentText = this.originalGreek;
+          } catch (error) {
+            console.error("Failed to load original text:", error);
+            this.showError("Failed to load text");
+          }
+        }
+
+        setupEventListeners() {
+          const btn = document.getElementById("cycleBtn");
+          btn.addEventListener("click", () => this.handleToggleClick());
+
+          // Keyboard shortcut to download log (Ctrl/Cmd + L)
+          document.addEventListener("keydown", (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "l") {
+              e.preventDefault();
+              this.downloadLog();
+              console.log("Translation log downloaded");
+            }
+          });
+        }
+
+        enableButton() {
+          const btn = document.getElementById("cycleBtn");
+          btn.disabled = false;
+          btn.classList.remove("loading");
+        }
+
+        async handleToggleClick() {
+          if (this.isRunning) {
+            // Stop the continuous cycle
+            this.stopCycle();
+          } else {
+            // Start the continuous cycle
+            this.startCycle();
+          }
+        }
+
+        startCycle() {
+          // Reset state for fresh start
+          this.resetCycleState();
+
+          this.isRunning = true;
+          this.shouldStop = false;
+          this.updateButtonState();
+
+          console.log("🚀 Starting fresh translation cycle");
+          this.startAtmosphere();
+          this.runContinuousCycle();
+        }
+
+        stopCycle() {
+          this.shouldStop = true;
+          this.isRunning = false;
+          this.updateButtonState();
+
+          // Stop any current audio when manually stopping
+          if (window.speechSynthesis) {
+            window.speechSynthesis.cancel();
+          }
+
+          // Stop continuous degradation
+          this.stopContinuousDegradation();
+
+          // Stop atmospheric audio
+          this.stopAtmosphere();
+
+          // Reset state for clean restart
+          this.resetCycleState();
+        }
+
+        resetCycleState() {
+          // Reset cycle counter and text state
+          this.currentCycle = 0;
+          this.currentText = this.originalGreek; // Reset to original text
+          this.audioFinished = false;
+          this.currentUtterance = null;
+
+          // Clear any error states and reset display
+          const display = document.getElementById("translationDisplay");
+          const content = document.getElementById("textContent");
+
+          // Reset content styling to normal
+          content.className = "text-content english";
+          content.style.opacity = "1";
+          content.style.transition = "none";
+
+          // Hide the display for clean restart
+          display.classList.add("hidden");
+          content.innerHTML = "";
+
+          console.log("🔄 Cycle state reset - ready for fresh start");
+        }
+
+        updateButtonState() {
+          const btn = document.getElementById("cycleBtn");
+          if (this.isRunning) {
+            btn.querySelector(".btn-text").textContent = "ω";
+            btn.classList.add("running");
+          } else {
+            btn.querySelector(".btn-text").textContent = "α";
+            btn.classList.remove("running");
+          }
+        }
+
+        async runContinuousCycle() {
+          let nextTranslationPromise = null;
+
+          while (this.isRunning && !this.shouldStop) {
             try {
-                const response = await fetch('/api/passages/odyssey_book1');
-                const data = await response.json();
-                
-                if (data.error) {
-                    document.getElementById('originalGreek').innerHTML = `<div class="error">Error loading text: ${data.error}</div>`;
+              // Increment cycle number at the start so it matches the log
+              this.currentCycle++;
+              console.log(`Starting cycle ${this.currentCycle}`);
+
+              if (this.currentCycle === 1) {
+                // First cycle: Get translation and start audio/display
+                const translationResult = await this.getFirstCycleTranslation();
+
+                // Start audio and display text
+                const audioPromise = this.playWithFadeIn(
+                  this.originalGreek,
+                  translationResult.englishText
+                );
+
+                // Start preparing next translation during audio, with degradation trigger
+                nextTranslationPromise =
+                  this.prepareNextTranslationWithDegradation();
+
+                // Wait for audio to complete
+                await audioPromise;
+              } else {
+                // Subsequent cycles: Use prepared translation and start immediately
+                if (nextTranslationPromise) {
+                  const translationResult = await nextTranslationPromise;
+
+                  // Start audio and display with cross-fade (degradation already started)
+                  const audioPromise = this.playWithFadeIn(
+                    translationResult.greekText,
+                    translationResult.englishText
+                  );
+
+                  // Start preparing next translation during audio, with degradation trigger
+                  if (this.isRunning && !this.shouldStop) {
+                    nextTranslationPromise =
+                      this.prepareNextTranslationWithDegradation();
+                  }
+
+                  // Wait for audio to complete
+                  await audioPromise;
                 } else {
-                    originalText = data.content;
-                    currentText = originalText;
-                    document.getElementById('originalGreek').innerHTML = `<div class="text-content">${originalText}</div>`;
+                  // Fallback if no prepared translation
+                  console.warn("No prepared translation, fetching now...");
+                  const translationResult = await this.prepareNextTranslation();
+                  const audioPromise = this.playWithFadeIn(
+                    translationResult.greekText,
+                    translationResult.englishText
+                  );
+                  await audioPromise;
                 }
+              }
+
+              // No pause needed - continuous flow with overlapping
             } catch (error) {
-                document.getElementById('originalGreek').innerHTML = `<div class="error">Failed to load Odyssey text: ${error.message}</div>`;
+              // Don't show error if we're intentionally stopping
+              if (this.shouldStop) {
+                console.log("Cycle stopped by user");
+                break;
+              }
+
+              console.error("Cycle failed:", error);
+              this.logCycle(
+                "ERROR",
+                `Cycle ${this.currentCycle} failed: ${error.message}`,
+                this.currentCycle
+              );
+              this.showError("Translation failed");
+              this.stopCycle();
+              break;
             }
-        });
+          }
+          console.log("Continuous cycle stopped");
+        }
 
-        // Handle translation cycle button
-        document.getElementById('runTranslationCycle').addEventListener('click', async () => {
-            if (!currentText) {
-                alert('Odyssey text not loaded yet. Please wait.');
-                return;
+        async getFirstCycleTranslation() {
+          const response = await fetch("/api/single-translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: this.originalGreek,
+              is_greek: true,
+            }),
+          });
+
+          const result = await response.json();
+          if (result.error) throw new Error(result.error);
+
+          this.currentText = result.translation;
+          return { englishText: result.translation };
+        }
+
+        async prepareNextTranslationWithDegradation() {
+          const result = await this.prepareNextTranslation();
+
+          // Start degradation when translation is ready (during current audio)
+          if (result && this.isRunning && !this.shouldStop) {
+            console.log(
+              "🔥 Translation ready - starting degradation during audio"
+            );
+            this.startContinuousDegradation();
+          }
+
+          return result;
+        }
+
+        async prepareNextTranslation() {
+          if (!this.currentText) return null;
+
+          const startTime = Date.now();
+          console.log(
+            `🔄 Preparing cycle ${
+              this.currentCycle + 1
+            } translation in background... (Text length: ${
+              this.currentText.length
+            } chars)`
+          );
+
+          try {
+            // Current text is English, translate to Greek first
+            const greekStartTime = Date.now();
+            console.log("📡 Starting English → Greek translation...");
+            const toGreekResponse = await fetch("/api/single-translate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: this.currentText,
+                is_greek: false,
+              }),
+            });
+
+            const greekResult = await toGreekResponse.json();
+            if (greekResult.error) throw new Error(greekResult.error);
+            console.log(
+              `✅ English → Greek completed (${Date.now() - greekStartTime}ms)`
+            );
+
+            // Translate back to English
+            const englishStartTime = Date.now();
+            console.log("📡 Starting Greek → English translation...");
+            const toEnglishResponse = await fetch("/api/single-translate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                text: greekResult.translation,
+                is_greek: true,
+              }),
+            });
+
+            const englishResult = await toEnglishResponse.json();
+            if (englishResult.error) throw new Error(englishResult.error);
+            console.log(
+              `✅ Greek → English completed (${
+                Date.now() - englishStartTime
+              }ms)`
+            );
+
+            this.currentText = englishResult.translation;
+
+            const duration = Date.now() - startTime;
+            console.log(
+              `✅ Cycle ${
+                this.currentCycle + 1
+              } translation ready! (${duration}ms)`
+            );
+
+            return {
+              greekText: greekResult.translation,
+              englishText: englishResult.translation,
+            };
+          } catch (error) {
+            console.error("❌ Translation preparation failed:", error);
+            throw error;
+          }
+        }
+
+        startContinuousDegradation() {
+          const content = document.getElementById("textContent");
+
+          if (content.innerHTML && content.innerHTML.trim()) {
+            console.log("Starting continuous text degradation animation...");
+
+            // Stop any existing degradation
+            this.stopContinuousDegradation();
+
+            // Start morphing repeatedly
+            this.continuousDegradationInterval = setInterval(() => {
+              if (this.isRunning && !this.shouldStop) {
+                this.morphCurrentTextContinuous();
+              } else {
+                this.stopContinuousDegradation();
+              }
+            }, 800); // Morph every 800ms for continuous effect
+          }
+        }
+
+        stopContinuousDegradation() {
+          if (this.continuousDegradationInterval) {
+            clearInterval(this.continuousDegradationInterval);
+            this.continuousDegradationInterval = null;
+          }
+        }
+
+        async morphCurrentTextContinuous() {
+          const content = document.getElementById("textContent");
+          const chars = content.querySelectorAll(".char-span");
+
+          if (chars.length === 0) return;
+
+          // Randomly select 10-20% of characters to morph (smaller percentage for continuous effect)
+          const morphCount = Math.floor(
+            chars.length * (0.1 + Math.random() * 0.1)
+          );
+          const indicesToMorph = [];
+
+          // Randomly select characters, avoiding spaces
+          while (indicesToMorph.length < morphCount) {
+            const randomIndex = Math.floor(Math.random() * chars.length);
+            if (
+              !indicesToMorph.includes(randomIndex) &&
+              chars[randomIndex].textContent.trim() !== ""
+            ) {
+              indicesToMorph.push(randomIndex);
+            }
+          }
+
+          // Morph selected characters with staggered timing
+          indicesToMorph.forEach((charIndex, i) => {
+            setTimeout(() => {
+              const charSpan = chars[charIndex];
+              if (charSpan) {
+                const randomGreekLetter =
+                  this.greekLetters[
+                    Math.floor(Math.random() * this.greekLetters.length)
+                  ];
+
+                charSpan.classList.add("morphing");
+                setTimeout(() => {
+                  charSpan.textContent = randomGreekLetter;
+                }, 250); // Change letter at animation midpoint
+              }
+            }, i * 30); // Faster staggering for continuous effect
+          });
+        }
+
+        async playWithFadeIn(greekText, englishText) {
+          // Check if we should stop before starting audio/animation
+          if (this.shouldStop) return;
+
+          // Log this cycle
+          this.logCycle(greekText, englishText, this.currentCycle);
+
+          // Prepare the display element
+          const display = document.getElementById("translationDisplay");
+          display.classList.remove("hidden");
+
+          // Display new text with cross-fade
+          await this.displayNewText(englishText);
+
+          // Start the Greek audio and wait for it to complete
+          await this.playGreekAudioWithPromise(greekText);
+
+          console.log(
+            `Audio-driven cycle completed for cycle ${this.currentCycle}`
+          );
+        }
+
+        playGreekAudioWithPromise(greekText) {
+          return new Promise((resolve, reject) => {
+            console.log(
+              "Starting Greek audio:",
+              greekText.substring(0, 50) + "..."
+            );
+
+            if (!window.speechSynthesis) {
+              console.warn("TTS not supported");
+              resolve();
+              return;
             }
 
-            const button = document.getElementById('runTranslationCycle');
-            const resultsDiv = document.getElementById('translationResults');
-            
-            // Disable button during processing
-            button.disabled = true;
-            button.textContent = 'Translating...';
+            // Add pitch and rate variation for more dynamic speech
+            const pitchVariation = Math.random() * 1.0; // Random pitch between 0.0 and 1.0 (much wider range)
+            const rateVariation = 0.5 + Math.random() * 0.35; // Rate between 0.5 and 0.85
 
-            try {
-                // Run one translation cycle: Greek → English → Greek
-                const response = await fetch('/api/single-translate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text: currentText,
-                        is_greek: true
-                    })
-                });
+            console.log(
+              `🎵 Voice settings - Pitch: ${(0.3 + pitchVariation).toFixed(
+                2
+              )}, Rate: ${rateVariation.toFixed(2)}`
+            );
 
-                const englishResult = await response.json();
-                
-                if (englishResult.error) {
-                    throw new Error(englishResult.error);
+            const utterance = new SpeechSynthesisUtterance(greekText);
+            utterance.lang = "el-GR";
+            utterance.rate = rateVariation; // Dynamic rate
+            utterance.pitch = 0.3 + pitchVariation; // Dynamic pitch (0.3 to 1.3 range - much deeper to higher)
+            utterance.volume = 1.0;
+
+            // Find best Greek voice for quality
+            const greekVoices = speechSynthesis
+              .getVoices()
+              .filter(
+                (voice) =>
+                  voice.lang.includes("el") ||
+                  voice.name.toLowerCase().includes("greek")
+              );
+            if (greekVoices.length > 0) {
+              utterance.voice = greekVoices[0];
+            }
+
+            // Store the cycle number when audio starts to avoid mislabeling
+            const audioCycleNumber = this.currentCycle;
+
+            utterance.onstart = () => {
+              console.log(
+                `✅ Greek audio started (cycle ${audioCycleNumber}) - Pitch: ${utterance.pitch.toFixed(
+                  2
+                )}, Rate: ${rateVariation.toFixed(2)}`
+              );
+
+              // Add simple visual effect during speech
+              const content = document.getElementById("textContent");
+              if (content) {
+                content.classList.add("speaking");
+              }
+
+              // Intensify atmosphere during speech
+              this.intensifyAtmosphere();
+            };
+
+            utterance.onend = () => {
+              console.log(
+                "✅ Greek audio finished (cycle",
+                audioCycleNumber,
+                ")"
+              );
+
+              // Remove visual effect when speech ends
+              const content = document.getElementById("textContent");
+              if (content) {
+                content.classList.remove("speaking");
+              }
+
+              // Return atmosphere to ambient level
+              this.calmAtmosphere();
+
+              resolve(); // Resolve when audio finishes
+            };
+
+            utterance.onerror = (event) => {
+              console.error("❌ Greek audio error:", event);
+              reject(event);
+            };
+
+            // Store current utterance for potential cancellation
+            this.currentUtterance = utterance;
+            window.speechSynthesis.speak(utterance);
+          });
+        }
+
+        displayResult(text) {
+          const display = document.getElementById("translationDisplay");
+          const content = document.getElementById("textContent");
+
+          content.textContent = text;
+          content.style.opacity = "1";
+          content.style.transition = "none";
+          display.classList.remove("hidden");
+        }
+
+        estimateAudioDuration(text) {
+          // More accurate estimation based on character count and TTS settings
+          // Average Greek characters per second at rate 0.6: ~8-10 chars/sec
+          const chars = text.length;
+          const charsPerSecond = 8; // Conservative estimate for Greek
+          const baseDurationMs = (chars / charsPerSecond) * 1000;
+
+          // Account for the slower TTS rate (0.6)
+          const adjustedDuration = baseDurationMs / this.ttsSettings.rate;
+
+          return Math.max(3000, Math.min(adjustedDuration, 15000)); // Between 3-15 seconds
+        }
+
+        showError(message) {
+          // Only show error if we're not in the middle of stopping/restarting
+          if (this.shouldStop || !this.isRunning) {
+            console.log(
+              "Suppressing error message during stop/restart:",
+              message
+            );
+            return;
+          }
+
+          const display = document.getElementById("translationDisplay");
+          const content = document.getElementById("textContent");
+
+          content.textContent = message;
+          content.className = "text-content error";
+          display.classList.remove("hidden");
+        }
+
+        delay(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        logCycle(greekText, englishText, cycleNumber) {
+          const logEntry = {
+            cycle: cycleNumber,
+            timestamp: new Date().toISOString(),
+            greek: greekText, // Full Greek text now
+            english: englishText,
+            greekLength: greekText.length,
+            englishLength: englishText.length,
+            englishWordCount: englishText.split(/\s+/).length,
+          };
+
+          this.cycleLog.push(logEntry);
+          console.log(`=== CYCLE ${cycleNumber} LOG ===`);
+          console.log(
+            `English (${logEntry.englishWordCount} words, ${logEntry.englishLength} chars):`,
+            englishText
+          );
+          console.log(
+            `Greek (${logEntry.greekLength} chars):`,
+            greekText.substring(0, 100) + (greekText.length > 100 ? "..." : "")
+          );
+
+          // Save to localStorage as backup
+          localStorage.setItem(
+            "museTranslationLog",
+            JSON.stringify(this.cycleLog)
+          );
+        }
+
+        downloadLog() {
+          const dataStr = JSON.stringify(this.cycleLog, null, 2);
+          const dataBlob = new Blob([dataStr], { type: "application/json" });
+          const url = URL.createObjectURL(dataBlob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `muse_translation_log_${
+            new Date().toISOString().split("T")[0]
+          }.json`;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+
+        // Convert text to individual character spans for animation
+        convertToCharSpans(text) {
+          return text
+            .split("")
+            .map((char) => {
+              if (char === " ") return " ";
+              return `<span class="char-span">${char}</span>`;
+            })
+            .join("");
+        }
+
+        // Create an imprint layer from current text
+        createImprint(htmlText) {
+          const imprintContainer = document.getElementById("imprintContainer");
+          const imprint = document.createElement("div");
+          imprint.className = "imprint-layer";
+
+          // Extract just the text content, no HTML spans
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = htmlText;
+          const plainText = tempDiv.textContent || tempDiv.innerText || "";
+          imprint.textContent = plainText;
+
+          // Get viewport dimensions
+          const viewportWidth = window.innerWidth;
+          const viewportHeight = window.innerHeight;
+
+          // Calculate much larger font size to fill viewport width
+          const textLength = plainText.length;
+          const estimatedCharsPerLine = Math.max(
+            15,
+            Math.min(25, textLength / 2)
+          ); // Fewer chars per line for bigger text
+          const fontSize = Math.max(
+            48,
+            (viewportWidth / estimatedCharsPerLine) * 2.5
+          ); // Much bigger scaling factor
+
+          // Calculate line height proportional to viewport height
+          // Aim for text to potentially fill the height if it's long enough
+          const estimatedLines = Math.ceil(textLength / estimatedCharsPerLine);
+          const lineHeight = Math.max(
+            1.2,
+            (viewportHeight / (estimatedLines * fontSize)) * 0.8
+          );
+
+          // Set dynamic sizing
+          imprint.style.fontSize = fontSize + "px";
+          imprint.style.lineHeight = lineHeight;
+          imprint.style.width = "95vw"; // Nearly full width for wrapping
+          imprint.style.maxWidth = "95vw";
+
+          // Add significant random positioning variation
+          const offsetX = (Math.random() - 0.3) * 600; // Range roughly -180 to 420
+          const offsetY = (Math.random() - 0.75) * 100; // ±50px vertical variation
+
+          const finalX = Math.max(-200, Math.min(offsetX, 400)); // Clamp to -200px to 400px range
+          const finalY = Math.max(0, Math.min(offsetY, viewportHeight * 0.1));
+
+          // Position the imprint with slight random variation
+          imprint.style.left = finalX + "px";
+          imprint.style.top = finalY + "px";
+
+          // Start completely invisible for gradual fade-in
+          imprint.style.opacity = "0";
+          imprint.style.transition =
+            "opacity 3s ease-in-out, transform 6s ease-out";
+
+          imprintContainer.appendChild(imprint);
+          this.imprints.push(imprint);
+
+          // Very gradual fade-in
+          setTimeout(() => {
+            imprint.style.opacity = "0.18"; // Start slightly more visible
+          }, 200);
+
+          // Continue expansion and further fading over longer time
+          setTimeout(() => {
+            imprint.classList.add("expanding");
+          }, 1000);
+
+          // Final fade to barely visible
+          setTimeout(() => {
+            imprint.classList.remove("expanding");
+            imprint.classList.add("expanded");
+          }, 6000);
+
+          // No cleanup - let imprints accumulate indefinitely for mystical buildup
+        }
+
+        // Display new text with smooth cross-fade from degraded text
+        async displayNewText(newText) {
+          const content = document.getElementById("textContent");
+
+          // If there's existing text, create cross-fade with imprint
+          if (content.innerHTML && content.innerHTML.trim()) {
+            console.log("Starting cross-fade transition...");
+
+            // Create imprint from current degraded text before stopping degradation
+            this.createImprint(content.innerHTML);
+
+            // Stop continuous degradation now that we're transitioning
+            this.stopContinuousDegradation();
+
+            // Clear any existing transitions and set initial state
+            content.style.transition = "none";
+            content.style.opacity = "1";
+
+            // Force reflow
+            content.offsetHeight;
+
+            // Now set the fade out transition and trigger it
+            content.style.transition = "opacity 1.2s ease-out";
+
+            // Small delay to ensure transition is set
+            setTimeout(() => {
+              if (!this.shouldStop) {
+                content.style.opacity = "0";
+                console.log("Started fade out...");
+              }
+            }, 20);
+
+            // Wait for fade out, then start fade in
+            setTimeout(() => {
+              if (!this.shouldStop) {
+                console.log("Starting fade in with new text...");
+
+                // Set up new text while invisible
+                content.innerHTML = this.convertToCharSpans(newText);
+                content.style.transition = "none";
+                content.style.opacity = "0";
+
+                // Force reflow
+                content.offsetHeight;
+
+                // Set fade in transition and trigger
+                content.style.transition = "opacity 1.2s ease-in";
+
+                setTimeout(() => {
+                  if (!this.shouldStop) {
+                    content.style.opacity = "1";
+                    console.log("Fade in started");
+                  }
+                }, 20);
+              }
+            }, 1300); // Wait 1.3s for fade out to complete
+
+            // Wait for complete transition
+            await this.delay(2600);
+          } else {
+            // No existing text, just fade in normally
+            console.log("First text - simple fade in");
+            content.innerHTML = this.convertToCharSpans(newText);
+            content.style.transition = "none";
+            content.style.opacity = "0";
+
+            // Force reflow
+            content.offsetHeight;
+
+            // Set transition and fade in
+            content.style.transition = "opacity 2s ease-in";
+
+            setTimeout(() => {
+              if (!this.shouldStop) {
+                content.style.opacity = "1";
+                console.log("Initial fade in started");
+              }
+            }, 50);
+
+            await this.delay(100);
+          }
+        }
+
+        // Tone.js atmospheric audio methods
+        async initAtmosphere() {
+          try {
+            console.log("🎵 Initializing atmospheric audio...");
+
+            // Create atmospheric sound layers with simpler routing
+            this.atmosphereNodes = {
+              // Very quiet deep drone layer
+              drone: new Tone.Oscillator({
+                frequency: 60,
+                type: "sine",
+                volume: -35,
+              }),
+
+              // Mid-frequency mystical pad
+              pad: new Tone.Oscillator({
+                frequency: 150,
+                type: "triangle",
+                volume: -22,
+              }),
+
+              // High frequency shimmer
+              shimmer: new Tone.Oscillator({
+                frequency: 400,
+                type: "sine",
+                volume: -30,
+              }),
+
+              // Effects
+              reverb: new Tone.Reverb({
+                roomSize: 0.7,
+                decay: 3,
+                wet: 0.3,
+              }),
+
+              // LFOs for subtle movement
+              droneLFO: new Tone.LFO({
+                frequency: 0.1,
+                type: "sine",
+                min: 55,
+                max: 65,
+              }),
+
+              padLFO: new Tone.LFO({
+                frequency: 0.08,
+                type: "triangle",
+                min: 140,
+                max: 160,
+              }),
+
+              shimmerLFO: new Tone.LFO({
+                frequency: 0.2,
+                type: "sine",
+                min: 380,
+                max: 420,
+              }),
+
+              // Bass drum with echo
+              bassDrum: new Tone.MembraneSynth({
+                pitchDecay: 0.05,
+                octaves: 8,
+                oscillator: {
+                  type: "sine",
+                },
+                envelope: {
+                  attack: 0.001,
+                  decay: 0.4,
+                  sustain: 0.01,
+                  release: 1.4,
+                  attackCurve: "exponential",
+                },
+              }),
+
+              // Echo delay for bass drum
+              drumDelay: new Tone.FeedbackDelay({
+                delayTime: "8n",
+                feedback: 0.3,
+                wet: 0.4,
+              }),
+            };
+
+            // Connect to destination with reverb
+            this.atmosphereNodes.drone.connect(this.atmosphereNodes.reverb);
+            this.atmosphereNodes.pad.connect(this.atmosphereNodes.reverb);
+            this.atmosphereNodes.shimmer.connect(this.atmosphereNodes.reverb);
+            this.atmosphereNodes.reverb.toDestination();
+
+            // Connect bass drum through delay and reverb
+            this.atmosphereNodes.bassDrum.connect(
+              this.atmosphereNodes.drumDelay
+            );
+            this.atmosphereNodes.drumDelay.connect(this.atmosphereNodes.reverb);
+
+            // Connect LFOs to frequencies
+            this.atmosphereNodes.droneLFO.connect(
+              this.atmosphereNodes.drone.frequency
+            );
+            this.atmosphereNodes.padLFO.connect(
+              this.atmosphereNodes.pad.frequency
+            );
+            this.atmosphereNodes.shimmerLFO.connect(
+              this.atmosphereNodes.shimmer.frequency
+            );
+
+            // Generate reverb
+            await this.atmosphereNodes.reverb.generate();
+            this.atmosphereInitialized = true;
+
+            console.log("✅ Atmospheric audio initialized");
+          } catch (error) {
+            console.error("❌ Failed to initialize atmosphere:", error);
+          }
+        }
+
+        async startAtmosphere() {
+          if (!this.atmosphereInitialized || !this.atmosphereNodes) return;
+
+          try {
+            await Tone.start();
+            console.log("🎵 Starting atmospheric audio...");
+
+            // Start all oscillators and LFOs
+            this.atmosphereNodes.drone.start();
+            this.atmosphereNodes.pad.start();
+            this.atmosphereNodes.shimmer.start();
+
+            this.atmosphereNodes.droneLFO.start();
+            this.atmosphereNodes.padLFO.start();
+            this.atmosphereNodes.shimmerLFO.start();
+
+            console.log("✅ Atmospheric audio started");
+
+            // Start random bass drum pattern
+            this.startRandomBassDrum();
+          } catch (error) {
+            console.error("❌ Failed to start atmosphere:", error);
+          }
+        }
+
+        intensifyAtmosphere() {
+          if (!this.atmosphereNodes) return;
+
+          console.log("🔥 Intensifying atmosphere during speech...");
+
+          // Gradually increase volume during speech
+          this.atmosphereNodes.drone.volume.rampTo(-30, 1);
+          this.atmosphereNodes.pad.volume.rampTo(-17, 1);
+          this.atmosphereNodes.shimmer.volume.rampTo(-25, 1);
+
+          // Speed up LFOs for more movement
+          this.atmosphereNodes.droneLFO.frequency.rampTo(0.15, 1);
+          this.atmosphereNodes.padLFO.frequency.rampTo(0.12, 1);
+          this.atmosphereNodes.shimmerLFO.frequency.rampTo(0.3, 1);
+        }
+
+        calmAtmosphere() {
+          if (!this.atmosphereNodes) return;
+
+          console.log("🌙 Calming atmosphere after speech...");
+
+          // Return to ambient levels
+          this.atmosphereNodes.drone.volume.rampTo(-35, 2);
+          this.atmosphereNodes.pad.volume.rampTo(-22, 2);
+          this.atmosphereNodes.shimmer.volume.rampTo(-30, 2);
+
+          // Slow down LFOs
+          this.atmosphereNodes.droneLFO.frequency.rampTo(0.1, 2);
+          this.atmosphereNodes.padLFO.frequency.rampTo(0.08, 2);
+          this.atmosphereNodes.shimmerLFO.frequency.rampTo(0.2, 2);
+        }
+
+        stopAtmosphere() {
+          if (!this.atmosphereNodes) return;
+
+          console.log("🔇 Stopping atmospheric audio...");
+
+          try {
+            // Stop bass drum pattern
+            this.stopRandomBassDrum();
+
+            // Stop all oscillators and LFOs
+            this.atmosphereNodes.drone.stop();
+            this.atmosphereNodes.pad.stop();
+            this.atmosphereNodes.shimmer.stop();
+
+            this.atmosphereNodes.droneLFO.stop();
+            this.atmosphereNodes.padLFO.stop();
+            this.atmosphereNodes.shimmerLFO.stop();
+
+            console.log("✅ Atmospheric audio stopped");
+          } catch (error) {
+            console.error("❌ Error stopping atmosphere:", error);
+          }
+        }
+
+        startRandomBassDrum() {
+          if (!this.atmosphereNodes || !this.atmosphereNodes.bassDrum) return;
+
+          // Schedule random bass drum hits
+          const scheduleNextDrum = () => {
+            if (this.isRunning && this.atmosphereNodes) {
+              // Random interval between 8-20 seconds
+              const nextHitTime = Math.random() * 12 + 8;
+
+              setTimeout(() => {
+                if (this.isRunning && this.atmosphereNodes) {
+                  // Trigger bass drum with random frequency (30-60Hz for deep bass)
+                  const frequency = Math.random() * 30 + 30;
+                  this.atmosphereNodes.bassDrum.triggerAttackRelease(
+                    frequency,
+                    "4n"
+                  );
+                  console.log("🥁 Bass drum hit");
+
+                  // Schedule next drum hit
+                  scheduleNextDrum();
                 }
-
-                // Now translate back to Greek
-                const backResponse = await fetch('/api/single-translate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        text: englishResult.translation,
-                        is_greek: false
-                    })
-                });
-
-                const greekResult = await backResponse.json();
-                
-                if (greekResult.error) {
-                    throw new Error(greekResult.error);
-                }
-
-                // Update cycle counter and current text
-                currentCycle++;
-                currentText = greekResult.translation;
-                document.getElementById('cycleNumber').textContent = currentCycle;
-
-                // Add the new cycle results
-                const cycleDiv = document.createElement('div');
-                cycleDiv.className = 'cycle-result';
-                cycleDiv.innerHTML = `
-                    <div class="cycle-header">
-                        <h3>Cycle ${currentCycle}</h3>
-                    </div>
-                    <div class="translation-step">
-                        <h4>Step 1: Greek → English</h4>
-                        <div class="translation-text english">${englishResult.translation}</div>
-                    </div>
-                    <div class="translation-step">
-                        <h4>Step 2: English → Greek</h4>
-                        <div class="translation-text greek">${greekResult.translation}</div>
-                    </div>
-                `;
-
-                resultsDiv.appendChild(cycleDiv);
-                
-                // Scroll to the new result
-                cycleDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-
-            } catch (error) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'cycle-result error';
-                errorDiv.innerHTML = `<div class="error">Cycle ${currentCycle + 1} failed: ${error.message}</div>`;
-                resultsDiv.appendChild(errorDiv);
-            } finally {
-                // Re-enable button
-                button.disabled = false;
-                button.textContent = 'Run Translation Cycle';
+              }, nextHitTime * 1000);
             }
-        });
+          };
+
+          // Start the pattern
+          scheduleNextDrum();
+        }
+
+        stopRandomBassDrum() {
+          // The drum pattern will stop naturally when this.isRunning becomes false
+          console.log("🔇 Bass drum pattern stopping...");
+        }
+      }
+
+      // Initialize when page loads
+      window.addEventListener("DOMContentLoaded", () => {
+        new TranslationCycle();
+      });
     </script>
-</body>
+  </body>
 </html>

@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Μοῦσα - Audio Translation Experience</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="audio-container">
+        <header>
+            <h1>Μοῦσα</h1>
+            <p class="subtitle">Audio Translation Experience</p>
+        </header>
+
+        <main class="audio-main">
+            <!-- Single button interface -->
+            <div class="cycle-control">
+                <button id="startCycle" class="cycle-btn" disabled>
+                    <span class="btn-text">Begin Translation Journey</span>
+                    <span class="btn-loading">Loading...</span>
+                </button>
+            </div>
+
+            <!-- Progress indicator -->
+            <div id="progressIndicator" class="progress-indicator hidden">
+                <div class="progress-steps">
+                    <div class="step" data-step="1">
+                        <span class="step-number">1</span>
+                        <span class="step-label">Original Greek</span>
+                    </div>
+                    <div class="step" data-step="2">
+                        <span class="step-number">2</span>
+                        <span class="step-label">First English</span>
+                    </div>
+                    <div class="step" data-step="3">
+                        <span class="step-number">3</span>
+                        <span class="step-label">Back to Greek</span>
+                    </div>
+                    <div class="step" data-step="4">
+                        <span class="step-number">4</span>
+                        <span class="step-label">Final English</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Translation display -->
+            <div id="translationDisplay" class="translation-display hidden">
+                <div class="current-text">
+                    <div id="textContent" class="text-content"></div>
+                    <div id="textLanguage" class="text-language"></div>
+                </div>
+            </div>
+
+            <!-- Audio controls (hidden, managed by JS) -->
+            <audio id="ttsAudio" style="display: none;"></audio>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Μοῦσα Audio Translation</p>
+        </footer>
+    </div>
+
+    <script>
+        class AudioTranslationCycle {
+            constructor() {
+                this.currentStep = 0;
+                this.steps = [];
+                this.isRunning = false;
+                this.ttsSettings = {
+                    rate: 0.6,
+                    pitch: 0.8,
+                    volume: 1.0,
+                    lang: 'el-GR' // Greek locale for Ancient Greek approximation
+                };
+                
+                this.initializeInterface();
+                this.setupEventListeners();
+            }
+
+            initializeInterface() {
+                // Enable the start button once interface is ready
+                const startBtn = document.getElementById('startCycle');
+                startBtn.disabled = false;
+                startBtn.querySelector('.btn-text').style.display = 'block';
+                startBtn.querySelector('.btn-loading').style.display = 'none';
+            }
+
+            setupEventListeners() {
+                const startBtn = document.getElementById('startCycle');
+                startBtn.addEventListener('click', () => this.startTranslationCycle());
+            }
+
+            async startTranslationCycle() {
+                if (this.isRunning) return;
+                
+                this.isRunning = true;
+                this.showLoading();
+                
+                try {
+                    // Fetch the translation cycle from the API
+                    const response = await fetch('/api/cycle-translate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            passage_name: 'odyssey_book1'
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    this.steps = data.steps;
+                    
+                    // Start the audio-visual cycle
+                    this.showProgress();
+                    await this.runAudioVisualCycle();
+                    
+                } catch (error) {
+                    console.error('Translation cycle failed:', error);
+                    this.showError('Translation cycle failed. Please try again.');
+                } finally {
+                    this.isRunning = false;
+                }
+            }
+
+            async runAudioVisualCycle() {
+                for (let i = 0; i < this.steps.length; i++) {
+                    const step = this.steps[i];
+                    
+                    // Update progress indicator
+                    this.updateProgress(i + 1);
+                    
+                    // Display the text
+                    this.displayText(step.text, step.language, step.description);
+                    
+                    // Play audio for Greek text only
+                    if (step.language === 'greek') {
+                        await this.speakGreekText(step.text);
+                    }
+                    
+                    // Wait before next step (longer for reading English)
+                    const delay = step.language === 'english' ? 4000 : 2000;
+                    await this.wait(delay);
+                }
+                
+                // Reset for next cycle
+                setTimeout(() => this.resetInterface(), 2000);
+            }
+
+            async speakGreekText(greekText) {
+                return new Promise((resolve) => {
+                    if (!window.speechSynthesis) {
+                        console.warn('Text-to-speech not supported');
+                        resolve();
+                        return;
+                    }
+
+                    const utterance = new SpeechSynthesisUtterance(greekText);
+                    
+                    // Configure for Ancient Greek approximation
+                    utterance.lang = this.ttsSettings.lang;
+                    utterance.rate = this.ttsSettings.rate;
+                    utterance.pitch = this.ttsSettings.pitch;
+                    utterance.volume = this.ttsSettings.volume;
+                    
+                    utterance.onend = () => resolve();
+                    utterance.onerror = () => resolve(); // Continue even if TTS fails
+                    
+                    window.speechSynthesis.speak(utterance);
+                });
+            }
+
+            displayText(text, language, description) {
+                const display = document.getElementById('translationDisplay');
+                const content = document.getElementById('textContent');
+                const languageLabel = document.getElementById('textLanguage');
+                
+                content.textContent = text;
+                languageLabel.textContent = description;
+                
+                // Add language-specific styling
+                content.className = `text-content ${language}`;
+                
+                display.classList.remove('hidden');
+            }
+
+            updateProgress(currentStep) {
+                this.currentStep = currentStep;
+                const steps = document.querySelectorAll('.step');
+                
+                steps.forEach((step, index) => {
+                    if (index < currentStep) {
+                        step.classList.add('completed');
+                        step.classList.remove('active');
+                    } else if (index === currentStep - 1) {
+                        step.classList.add('active');
+                        step.classList.remove('completed');
+                    } else {
+                        step.classList.remove('active', 'completed');
+                    }
+                });
+            }
+
+            showLoading() {
+                const startBtn = document.getElementById('startCycle');
+                startBtn.querySelector('.btn-text').style.display = 'none';
+                startBtn.querySelector('.btn-loading').style.display = 'block';
+                startBtn.disabled = true;
+            }
+
+            showProgress() {
+                document.getElementById('progressIndicator').classList.remove('hidden');
+            }
+
+            showError(message) {
+                const content = document.getElementById('textContent');
+                const languageLabel = document.getElementById('textLanguage');
+                
+                content.textContent = message;
+                languageLabel.textContent = 'Error';
+                content.className = 'text-content error';
+                
+                document.getElementById('translationDisplay').classList.remove('hidden');
+            }
+
+            resetInterface() {
+                // Reset button
+                const startBtn = document.getElementById('startCycle');
+                startBtn.querySelector('.btn-text').style.display = 'block';
+                startBtn.querySelector('.btn-loading').style.display = 'none';
+                startBtn.disabled = false;
+                
+                // Hide elements
+                document.getElementById('progressIndicator').classList.add('hidden');
+                document.getElementById('translationDisplay').classList.add('hidden');
+                
+                // Reset progress
+                this.currentStep = 0;
+                document.querySelectorAll('.step').forEach(step => {
+                    step.classList.remove('active', 'completed');
+                });
+            }
+
+            wait(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Initialize the application
+        window.addEventListener('DOMContentLoaded', () => {
+            new AudioTranslationCycle();
+        });
+    </script>
+</body>
+</html>
+                
+                if (data.error) {
+                    document.getElementById('originalGreek').innerHTML = `<div class="error">Error loading text: ${data.error}</div>`;
+                } else {
+                    originalText = data.content;
+                    currentText = originalText;
+                    document.getElementById('originalGreek').innerHTML = `<div class="text-content">${originalText}</div>`;
+                }
+            } catch (error) {
+                document.getElementById('originalGreek').innerHTML = `<div class="error">Failed to load Odyssey text: ${error.message}</div>`;
+            }
+        });
+
+        // Handle translation cycle button
+        document.getElementById('runTranslationCycle').addEventListener('click', async () => {
+            if (!currentText) {
+                alert('Odyssey text not loaded yet. Please wait.');
+                return;
+            }
+
+            const button = document.getElementById('runTranslationCycle');
+            const resultsDiv = document.getElementById('translationResults');
+            
+            // Disable button during processing
+            button.disabled = true;
+            button.textContent = 'Translating (this may take 30-60 seconds)...';
+
+            try {
+                // Take only the first few lines to make it faster
+                const textToTranslate = currentText.split('\n').slice(0, 3).join('\n');
+                
+                console.log('Starting translation cycle...');
+                
+                // Run one translation cycle: Greek → English → Greek
+                const response = await fetch('/api/single-translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: textToTranslate,
+                        is_greek: true
+                    })
+                });
+
+                const englishResult = await response.json();
+                
+                if (englishResult.error) {
+                    throw new Error(englishResult.error);
+                }
+
+                console.log('English translation complete, translating back to Greek...');
+
+                // Now translate back to Greek
+                const backResponse = await fetch('/api/single-translate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: englishResult.translation,
+                        is_greek: false
+                    })
+                });
+
+                const greekResult = await backResponse.json();
+                
+                if (greekResult.error) {
+                    throw new Error(greekResult.error);
+                }
+
+                console.log('Translation cycle complete!');
+
+                // Update cycle counter and current text
+                currentCycle++;
+                currentText = greekResult.translation;
+                document.getElementById('cycleNumber').textContent = currentCycle;
+
+                // Add the new cycle results
+                const cycleDiv = document.createElement('div');
+                cycleDiv.className = 'cycle-result';
+                cycleDiv.innerHTML = `
+                    <div class="cycle-header">
+                        <h3>Cycle ${currentCycle}</h3>
+                        <small>Processing time: ~${Math.round(performance.now() / 1000)}s</small>
+                    </div>
+                    <div class="translation-step">
+                        <h4>Step 1: Greek → English</h4>
+                        <div class="translation-text english">${englishResult.translation}</div>
+                    </div>
+                    <div class="translation-step">
+                        <h4>Step 2: English → Greek</h4>
+                        <div class="translation-text greek">${greekResult.translation}</div>
+                    </div>
+                `;
+
+                resultsDiv.appendChild(cycleDiv);
+                
+                // Scroll to the new result
+                cycleDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+            } catch (error) {
+                console.error('Translation error:', error);
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'cycle-result error';
+                errorDiv.innerHTML = `<div class="error">Cycle ${currentCycle + 1} failed: ${error.message}</div>`;
+                resultsDiv.appendChild(errorDiv);
+            } finally {
+                // Re-enable button
+                button.disabled = false;
+                button.textContent = 'Run Translation Cycle';
+            }
+        });
+    </script>
+</body>
+</html>

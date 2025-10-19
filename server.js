@@ -220,6 +220,96 @@ app.get("/api/results", async (req, res) => {
   }
 });
 
+app.post("/api/cycle-translate", async (req, res) => {
+  try {
+    const { passage_name } = req.body;
+
+    if (!passage_name) {
+      return res.status(400).json({ error: "No passage name provided" });
+    }
+
+    // Read the passage file
+    const passagePath = path.join(__dirname, "passages", `${passage_name}.txt`);
+    let greekText;
+
+    try {
+      greekText = await fs.readFile(passagePath, "utf8");
+      greekText = greekText.trim();
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ error: `Passage file not found: ${passage_name}.txt` });
+    }
+
+    const modelName = "llama3.2:3b";
+    const engine = new TranslationEngine(modelName);
+
+    // Step 1: Greek → English (with Poet personality)
+    const poetPrompt = `You are a passionate poet who translates with creative flair and dramatic expression.
+Translate this Ancient Greek text to English, while capturing its epic spirit and emotional power.
+Embrace vivid imagery, grand language, and the heroic tone of classical literature.
+Provide ONLY the English translation, no explanations.`;
+
+    const englishTranslation = await engine.translateToEnglish(
+      greekText,
+      poetPrompt
+    );
+
+    // Step 2: English → Greek (with Muse personality)
+    const musePrompt = `You are the divine Muse of epic poetry, weaving words with supernatural grace.
+Translate this English text to Ancient Greek.
+Channel divine inspiration, using magical epithets, mystical language and patterns, and the sacred rhythm of the gods.
+Let your translation flow with otherworldly beauty and mythic power.
+Give absolutely NO explanations.`;
+
+    const backToGreek = await engine.translateToGreek(
+      englishTranslation,
+      musePrompt
+    );
+
+    // Step 3: Greek → English again (final translation)
+    const finalEnglish = await engine.translateToEnglish(
+      backToGreek,
+      poetPrompt
+    );
+
+    return res.json({
+      cycle_complete: true,
+      steps: [
+        {
+          step: 1,
+          text: greekText,
+          language: "greek",
+          description: "Original Ancient Greek text",
+        },
+        {
+          step: 2,
+          text: englishTranslation,
+          language: "english",
+          description: "First Greek → English translation",
+        },
+        {
+          step: 3,
+          text: backToGreek,
+          language: "greek",
+          description: "English → Greek back-translation",
+        },
+        {
+          step: 4,
+          text: finalEnglish,
+          language: "english",
+          description: "Final Greek → English translation",
+        },
+      ],
+      model_used: modelName,
+      passage_name: passage_name,
+    });
+  } catch (error) {
+    console.error("Cycle translate error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
 app.get("/results/:filename", (req, res) => {
   const filename = req.params.filename;
   const filepath = path.join(__dirname, "results", filename);

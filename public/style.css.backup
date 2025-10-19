@@ -13,18 +13,16 @@ body {
   background: #fafafa;
   min-height: 100vh;
   overflow-x: hidden;
-  overflow-y: auto; /* Ensure vertical scrolling is allowed */
 }
 
 .minimal-container {
   width: 100%;
-  min-height: 100vh; /* Allow container to grow taller than viewport */
+  height: 100vh;
   display: flex;
-  align-items: flex-start; /* Align to top instead of center */
+  align-items: center;
   justify-content: center;
   padding: 40px;
   position: relative;
-  padding-top: 80px; /* Add more top padding so content starts visible */
 }
 
 /* Translation Display - Centered */
@@ -41,7 +39,6 @@ body {
   font-weight: 400;
   letter-spacing: 0.5px;
   position: relative;
-  opacity: 1;
 }
 
 .fade-word {
@@ -67,28 +64,28 @@ body {
   right: 40px;
   width: 80px;
   height: 80px;
-  border-radius: 0;
+  border-radius: 50%;
   border: none;
-  background: transparent;
-  color: #000;
-  font-size: 3em;
+  background: linear-gradient(145deg, #3498db, #2980b9);
+  color: white;
+  font-size: 2em;
   cursor: pointer;
+  box-shadow: 0 8px 25px rgba(52, 152, 219, 0.3);
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  font-family: "Times New Roman", serif;
-  font-weight: normal;
 }
 
 .floating-btn:hover:not(:disabled) {
-  transform: scale(1.1);
-  color: #333;
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 12px 35px rgba(52, 152, 219, 0.4);
+  background: linear-gradient(145deg, #2980b9, #1f618d);
 }
 
 .floating-btn:active:not(:disabled) {
-  transform: scale(1.05);
+  transform: translateY(-1px) scale(1.02);
 }
 
 .floating-btn.loading {
@@ -101,118 +98,14 @@ body {
   transform: none;
 }
 
-/* Text Animation & Degradation Effects */
-.char-span {
-  display: inline;
-  transition: all 0.3s ease;
-}
-
-.char-span.morphing {
-  animation: morphToGreek 0.5s ease-in-out forwards;
-}
-
-/* Echo effect animation for text during speech */
-.text-content.speaking {
-  animation: textEcho 2s ease-in-out infinite;
-  text-shadow: 0 0 5px rgba(44, 62, 80, 0.3), 0 0 10px rgba(44, 62, 80, 0.2),
-    0 0 15px rgba(44, 62, 80, 0.1);
-}
-
-@keyframes textEcho {
-  0%,
-  100% {
-    text-shadow: 0 0 5px rgba(44, 62, 80, 0.3), 0 0 10px rgba(44, 62, 80, 0.2),
-      0 0 15px rgba(44, 62, 80, 0.1);
-    transform: scale(1);
-  }
-  50% {
-    text-shadow: 0 0 8px rgba(44, 62, 80, 0.4), 0 0 16px rgba(44, 62, 80, 0.3),
-      0 0 24px rgba(44, 62, 80, 0.2), 0 0 32px rgba(44, 62, 80, 0.1);
-    transform: scale(1.002);
-  }
-}
-
-/* Fade out animation for text transition */
-.text-content.fading-out {
-  transition: opacity 1.5s ease-out;
-  opacity: 0;
-}
-
-@keyframes morphToGreek {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.2);
-    opacity: 0.7;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0.9;
-  }
-}
-
-/* Imprint Layer System */
-.imprint-layer {
-  position: absolute;
-  pointer-events: none;
-  z-index: 1;
-  color: #ad0202;
-  font-weight: 300;
-  letter-spacing: 0.3px;
-  font-family: "Georgia", "Times New Roman", serif;
-  font-style: italic;
-  white-space: normal; /* Allow wrapping */
-  text-align: left; /* Left align for natural reading */
-  word-wrap: break-word;
-  opacity: 0;
-  transition: opacity 3s ease-in-out, transform 6s ease-out;
-  margin: 0 !important;
-  padding: 0 !important;
-  height: 100vh;
-  /* Dark blue glow effect */
-  text-shadow: 0 0 10px #1e3a8a, 0 0 20px #1e3a8a, 0 0 30px #1e3a8a,
-    0 0 40px #1e3a8a;
-  /* Size and positioning will be set dynamically by JavaScript */
-}
-
-.imprint-layer.expanding {
-  opacity: 0.15;
-  transform: scale(0.95) translateY(-15px);
-}
-
-.imprint-layer.expanded {
-  opacity: 0.08; /* More visible than before - still subtle but present */
-  transform: scale(0.9) translateY(-25px); /* Less dramatic scaling and movement */
-}
-
-/* Imprint container */
-.imprint-container {
-  position: fixed;
-  top: 0 !important;
-  left: 0 !important;
-  width: 100vw;
-  height: 100vh;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 1;
-  margin: 0 !important;
-  padding: 0 !important;
-}
-
-/* Ensure main text stays on top */
-.text-content {
-  position: relative;
-  z-index: 10;
-}
-
 .floating-btn.running {
-  color: #000;
+  background: linear-gradient(145deg, #e74c3c, #c0392b);
+  box-shadow: 0 8px 25px rgba(231, 76, 60, 0.3);
 }
 
 .floating-btn.running:hover:not(:disabled) {
-  color: #333;
+  background: linear-gradient(145deg, #c0392b, #a93226);
+  box-shadow: 0 12px 35px rgba(231, 76, 60, 0.4);
 }
 
 .btn-text {
