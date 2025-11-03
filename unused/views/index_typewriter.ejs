@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Μοῦσα - Typewriter</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="minimal-container">
+      <div id="translationDisplay" class="translation-display hidden">
+        <div id="textContent" class="text-content english"></div>
+      </div>
+
+      <button id="cycleBtn" class="floating-btn">
+        <span class="btn-text">▶</span>
+      </button>
+    </div>
+
+    <script>
+      // Typewriter display variant for readability testing
+      document.addEventListener("DOMContentLoaded", () => {
+        const btn = document.getElementById("cycleBtn");
+        btn.disabled = false;
+
+        btn.addEventListener("click", async () => {
+          const resp = await fetch("/api/passages/odyssey_book1");
+          const data = await resp.json();
+          const txt = data.content.substring(0, 500);
+
+          const content = document.getElementById("textContent");
+          content.textContent = "";
+          content.classList.remove("hidden");
+
+          let i = 0;
+          const interval = setInterval(() => {
+            content.textContent = txt.substring(0, i);
+            i++;
+            if (i > txt.length) clearInterval(interval);
+          }, 30);
+        });
+      });
+    </script>
+  </body>
+</html>

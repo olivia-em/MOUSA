@@ -1,0 +1,6 @@
+/* Backup of style.css (older theme) */
+
+* { box-sizing: border-box; }
+body { font-family: Georgia, serif; background: #fff; color: #222; }
+.minimal-container { display:flex; align-items:center; justify-content:center; height:100vh; }
+.floating-btn { position: fixed; bottom: 30px; right:30px; width:60px; height:60px; border-radius:50%; background:#333; color:#fff; }

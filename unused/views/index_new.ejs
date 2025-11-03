@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Μοῦσα - Experimental</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="audio-container">
+      <header>
+        <h1>Μοῦσα Experimental UI</h1>
+      </header>
+
+      <main>
+        <button id="startBtn" disabled>Start</button>
+        <div id="status">Initializing...</div>
+      </main>
+
+      <footer>
+        <small>Experimental layout</small>
+      </footer>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const btn = document.getElementById("startBtn");
+        btn.disabled = false;
+        document.getElementById("status").textContent = "Ready";
+        btn.addEventListener("click", async () => {
+          btn.disabled = true;
+          document.getElementById("status").textContent = "Running...";
+
+          try {
+            const resp = await fetch("/api/passages/odyssey_book1");
+            const data = await resp.json();
+            console.log(data);
+            document.getElementById(
+              "status"
+            ).textContent = `Loaded (${data.length} chars)`;
+          } catch (e) {
+            console.error(e);
+            document.getElementById("status").textContent = "Failed to load";
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    </script>
+  </body>
+</html>

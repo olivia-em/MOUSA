@@ -10,21 +10,13 @@
 
     <script>
       function testBasicTTS() {
-        console.log("Testing basic TTS...");
         const utterance = new SpeechSynthesisUtterance("Hello world");
-        utterance.onstart = () => console.log("✅ Basic TTS started");
-        utterance.onend = () => console.log("✅ Basic TTS ended");
-        utterance.onerror = (e) => console.error("❌ Basic TTS error:", e);
         speechSynthesis.speak(utterance);
       }
 
       function testGreekTTS() {
-        console.log("Testing Greek TTS...");
         const utterance = new SpeechSynthesisUtterance("Γεια σας");
         utterance.lang = "el-GR";
-        utterance.onstart = () => console.log("✅ Greek TTS started");
-        utterance.onend = () => console.log("✅ Greek TTS ended");
-        utterance.onerror = (e) => console.error("❌ Greek TTS error:", e);
         speechSynthesis.speak(utterance);
       }
     </script>

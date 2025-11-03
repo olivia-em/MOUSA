@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Μοῦσα - Simple</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="minimal-container">
+      <div id="translationDisplay" class="translation-display hidden">
+        <div id="textContent" class="text-content english"></div>
+      </div>
+
+      <button id="cycleBtn" class="floating-btn">
+        <span class="btn-text">▶</span>
+      </button>
+    </div>
+
+    <script>
+      // Minimal UI variant kept for reference
+      document.addEventListener("DOMContentLoaded", () => {
+        const btn = document.getElementById("cycleBtn");
+        btn.disabled = false;
+        btn.addEventListener("click", async () => {
+          const res = await fetch("/api/passages/odyssey_book1");
+          const data = await res.json();
+          document.getElementById("textContent").textContent =
+            data.content.substring(0, 300) + "...";
+        });
+      });
+    </script>
+  </body>
+</html>

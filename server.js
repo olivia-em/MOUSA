@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { TranslationEngine, DegradationAnalyzer } from "./lib/translator.js";
+import oracle from "./lib/oracle.js";
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -31,6 +32,11 @@ ensureDirectoryExists("results");
 // Routes
 app.get("/", (req, res) => {
   res.render("index");
+});
+
+// Storyteller / Oracle UI route
+app.get("/storyteller", (req, res) => {
+  res.render("storyteller");
 });
 
 app.post("/api/single-translate", async (req, res) => {
@@ -318,6 +324,31 @@ app.get("/results/:filename", (req, res) => {
       res.status(404).json({ error: "File not found" });
     }
   });
+});
+
+// Oracle prediction endpoint - returns a short prediction constructed only
+// from words in the iliad dictionary. POST { prompt, length, mode, temperature }
+app.post("/api/oracle-predict", async (req, res) => {
+  try {
+    const {
+      prompt = "",
+      size = "short", // 'short' (1-3 sentences) or 'long' (1-2 paragraphs)
+      mode = "llm",
+      temperature = 1.0,
+    } = req.body || {};
+
+    // oracle.predict is async now (may call Ollama); await it
+    const result = await oracle.predict(prompt, {
+      size,
+      mode,
+      temperature: Number(temperature),
+    });
+
+    return res.json(result);
+  } catch (error) {
+    console.error("Oracle predict error:", error);
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 app.listen(port, () => {

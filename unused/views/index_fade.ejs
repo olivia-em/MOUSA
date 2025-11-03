@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Μοῦσα</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="minimal-container">
+      <!-- Translation display - Centered -->
+      <div id="translationDisplay" class="translation-display hidden">
+        <div id="textContent" class="text-content english"></div>
+      </div>
+
+      <!-- Fixed floating button - bottom right -->
+      <button id="cycleBtn" class="floating-btn">
+        <span class="btn-text">▶</span>
+      </button>
+    </div>
+
+    <script>
+      // Simple fade variant of the TranslationCycle (older experiment)
+      class TranslationCycleFade {
+        constructor() {
+          this.currentCycle = 0;
+          this.currentText = "";
+          this.originalGreek = "";
+          this.isLoading = false;
+
+          this.init();
+        }
+
+        async init() {
+          await this.loadOriginalText();
+          this.setupEventListeners();
+          this.enableButton();
+        }
+
+        async loadOriginalText() {
+          try {
+            const response = await fetch("/api/passages/odyssey_book1");
+            const data = await response.json();
+            if (data.error) throw new Error(data.error);
+            this.originalGreek = data.content;
+            this.currentText = this.originalGreek;
+          } catch (err) {
+            console.error(err);
+          }
+        }
+
+        setupEventListeners() {
+          const btn = document.getElementById("cycleBtn");
+          btn.addEventListener("click", () => this.handleCycleClick());
+        }
+
+        enableButton() {
+          const btn = document.getElementById("cycleBtn");
+          btn.disabled = false;
+          btn.classList.remove("loading");
+        }
+
+        async handleCycleClick() {
+          if (this.isLoading) return;
+          this.isLoading = true;
+
+          try {
+            if (this.currentCycle === 0) {
+              await this.firstCycle();
+            } else {
+              await this.subsequentCycle();
+            }
+          } catch (e) {
+            console.error(e);
+          } finally {
+            this.isLoading = false;
+          }
+        }
+
+        async firstCycle() {
+          const res = await fetch("/api/single-translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: this.originalGreek, is_greek: true }),
+          });
+
+          const data = await res.json();
+          this.currentText = data.translation;
+          this.currentCycle = 1;
+
+          await this.playWithFadeIn(this.originalGreek, this.currentText);
+        }
+
+        async subsequentCycle() {
+          const toGreek = await fetch("/api/single-translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: this.currentText, is_greek: false }),
+          });
+
+          const greekRes = await toGreek.json();
+
+          const backToEnglish = await fetch("/api/single-translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text: greekRes.translation,
+              is_greek: true,
+            }),
+          });
+
+          const engRes = await backToEnglish.json();
+          this.currentText = engRes.translation;
+          this.currentCycle++;
+
+          await this.playWithFadeIn(greekRes.translation, this.currentText);
+        }
+
+        async playWithFadeIn(greekText, englishText) {
+          const content = document.getElementById("textContent");
+          content.textContent = englishText;
+          content.style.opacity = "0";
+          content.style.transition = "opacity 1.8s ease-in";
+
+          // Start TTS in background
+          const utterance = new SpeechSynthesisUtterance(greekText);
+          utterance.lang = "el-GR";
+          window.speechSynthesis.speak(utterance);
+
+          setTimeout(() => {
+            content.style.opacity = "1";
+          }, 100);
+
+          await new Promise((r) => setTimeout(r, 2200));
+        }
+      }
+
+      window.addEventListener("DOMContentLoaded", () => {
+        new TranslationCycleFade();
+      });
+    </script>
+  </body>
+</html>

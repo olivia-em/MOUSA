@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Oracle — Speak</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' fill='white'>α</text></svg>"
+    />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: system-ui, -apple-system, Segoe UI, Roboto,
+          "Helvetica Neue", Arial;
+      }
+      .center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: #0b0b0b;
+        color: #fff;
+      }
+      .panel {
+        text-align: center;
+        padding: 20px;
+        border-radius: 12px;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.02),
+          rgba(255, 255, 255, 0.01)
+        );
+        width: min(520px, 90%);
+      }
+      button {
+        font-size: 1.2rem;
+        padding: 12px 18px;
+        border-radius: 10px;
+        border: 0;
+        background: #1f8cff;
+        color: white;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] {
+        background: #d94b4b;
+      }
+      #status {
+        margin-top: 12px;
+        color: #ccc;
+      }
+      #warning {
+        margin-top: 10px;
+        color: orange;
+      }
+      .small {
+        font-size: 0.9rem;
+        color: #999;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="center">
+      <div class="panel">
+        <h2 style="margin: 0 0 12px 0">Ask the Oracle</h2>
+        <div>
+          <button id="micBtn" aria-pressed="false" title="Speak to the Oracle">
+            🎤 Speak
+          </button>
+        </div>
+        <div id="status" class="small">
+          Press Speak and ask your question aloud.
+        </div>
+        <div id="warning" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        const micBtn = document.getElementById("micBtn");
+        const status = document.getElementById("status");
+        const warning = document.getElementById("warning");
+
+        let recognition = null;
+        let spokenPrompt = null;
+
+        const SpeechRec =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRec) {
+          recognition = new SpeechRec();
+          recognition.lang = "en-US";
+          recognition.interimResults = true;
+          recognition.maxAlternatives = 1;
+
+          recognition.onstart = () => {
+            micBtn.setAttribute("aria-pressed", "true");
+            micBtn.textContent = "⏹ Stop";
+            status.textContent = "Listening...";
+            warning.textContent = "";
+          };
+
+          recognition.onresult = (event) => {
+            // accumulate final results silently
+            let final = "";
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+              const r = event.results[i];
+              if (r.isFinal) final += r[0].transcript + " ";
+            }
+            if (final.trim()) {
+              spokenPrompt = final.trim();
+              recognition.stop();
+              // Auto-submit final transcript
+              performAsk(spokenPrompt);
+            }
+          };
+
+          recognition.onerror = (ev) => {
+            micBtn.setAttribute("aria-pressed", "false");
+            micBtn.textContent = "🎤 Speak";
+            status.textContent = "Speech recognition error";
+            warning.textContent =
+              ev && ev.error ? "Error: " + ev.error : "Recognition error";
+            setTimeout(() => {
+              warning.textContent = "";
+              status.textContent = "Press Speak and ask your question aloud.";
+            }, 3000);
+          };
+
+          recognition.onend = () => {
+            micBtn.setAttribute("aria-pressed", "false");
+            micBtn.textContent = "🎤 Speak";
+            if (!spokenPrompt)
+              status.textContent = "Press Speak and ask your question aloud.";
+          };
+        } else {
+          micBtn.disabled = true;
+          status.textContent =
+            "Speech recognition not supported in this browser.";
+        }
+
+        micBtn.addEventListener("click", () => {
+          if (!recognition) return;
+          try {
+            if (micBtn.getAttribute("aria-pressed") === "true") {
+              recognition.stop();
+            } else {
+              spokenPrompt = null;
+              recognition.start();
+            }
+          } catch (e) {
+            console.warn("rec toggle", e);
+          }
+        });
+
+        async function performAsk(explicitPrompt) {
+          const prompt = explicitPrompt || "";
+          // fixed short single-sentence mode
+          const size = "short";
+          const mode = "llm";
+          const temperature = 0.7;
+
+          status.textContent = "Consulting the Oracle...";
+          warning.textContent = "";
+
+          try {
+            const resp = await fetch("/api/oracle-predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ prompt, size, mode, temperature }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) {
+              status.textContent = "Error: " + (data.error || resp.statusText);
+              return;
+            }
+
+            const utter = new SpeechSynthesisUtterance(data.text || "");
+            utter.rate = 1.0;
+            utter.pitch = 1.0;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
+
+            status.textContent = "Oracle spoke.";
+            if (data.warning) {
+              warning.textContent = data.warning;
+            }
+          } catch (err) {
+            status.textContent = "Request failed: " + err.message;
+          }
+        }
+      })();
+    </script>
+  </body>
+</html>
+});
